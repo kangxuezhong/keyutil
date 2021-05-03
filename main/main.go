@@ -98,7 +98,7 @@ func sm2Encrypt(pubKey, plaintext string, cipherMode int) (string, error) {
 	if cipherMode == 1 {
 		d0, err = sm2.Encrypt(pub, msg, rand.Reader)
 	} else {
-		d0, err = sm2.EncryptPreviously(pub, msg, rand.Reader) //ff
+		d0, err = sm2.EncryptWithOldModel(pub, msg, rand.Reader) //ff
 	}
 
 	if err != nil {
@@ -122,7 +122,7 @@ func sm2Decrypt(priKey, ciphertext string, cipherMode int) (string, error) {
 	if cipherMode == 1 {
 		d0, err = sm2.Decrypt(priv, bytesPass)
 	} else {
-		d0, err = sm2.DecryptPreviously(priv, bytesPass) //ff
+		d0, err = sm2.DecryptWithOldModel(priv, bytesPass) //ff
 	}
 	if err != nil {
 		return "", errors.New("解密失败")
@@ -261,7 +261,7 @@ func testsm2() {
 
 	//加密
 	msg := []byte("浪潮inspur123！@#￥%%……")
-	d0, err := sm2.EncryptPreviously(pub, msg, rand.Reader) //ff
+	d0, err := sm2.EncryptWithOldModel(pub, msg, rand.Reader) //ff
 	if err != nil {
 		fmt.Printf("Error: failed to encrypt %s: %v\n", msg, err)
 		return
@@ -269,7 +269,7 @@ func testsm2() {
 	fmt.Printf("Cipher text = %v\n", hex.EncodeToString(d0))
 
 	//解密
-	d1, err := sm2.DecryptPreviously(priv, d0) //ff
+	d1, err := sm2.DecryptWithOldModel(priv, d0) //ff
 	if err != nil {
 		fmt.Printf("Error: failed to decrypt: %v\n", err)
 	}
