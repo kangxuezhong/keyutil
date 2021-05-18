@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
-	"github.com/kangxuezhong/gmsm/sm4"
+	"github.com/tjfoc/gmsm/sm4"
 	"io"
 	"strings"
 )

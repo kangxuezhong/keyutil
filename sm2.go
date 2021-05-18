@@ -3,9 +3,11 @@ package keyutil
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
-	"github.com/kangxuezhong/gmsm/sm2"
-	"github.com/kangxuezhong/gmsm/x509"
+	"github.com/tjfoc/gmsm/sm2"
+	"io"
+	"math/big"
 )
 
 type KeyPair struct {
@@ -20,8 +22,8 @@ func GenSm2Key() (*KeyPair, error) {
 	}
 	pub := &pri.PublicKey
 	keyPair := new(KeyPair)
-	keyPair.priKey = x509.WritePrivateKeyToDhex(pri)
-	keyPair.pubKey = x509.WritePublicKeyToQhex(pub)
+	keyPair.priKey = writePrivateKeyToHex(pri)
+	keyPair.pubKey = writePublicKeyToHex(pub)
 	return keyPair, nil
 }
 
@@ -34,7 +36,7 @@ func Sm2Encrypt(pubKey, plaintext string, cipherMode int) (string, error) {
 		return "", errors.New(plaintextSupport)
 	}
 
-	pub, err1 := x509.ReadPublicKeyFromQhex(pubKey)
+	pub, err1 := readPublicKeyFromHex(pubKey)
 	if err1 != nil {
 		return "", err1
 	}
@@ -45,7 +47,7 @@ func Sm2Encrypt(pubKey, plaintext string, cipherMode int) (string, error) {
 	if cipherMode == 1 {
 		d0, err2 = sm2.Encrypt(pub, msg, rand.Reader)
 	} else {
-		d0, err2 = sm2.EncryptWithOldModel(pub, msg, rand.Reader)
+		d0, err2 = encryptWithOldModel(pub, msg, rand.Reader)
 	}
 	if err2 != nil {
 		return "", err2
@@ -71,13 +73,16 @@ func Sm2Decrypt(priKey, ciphertext string, cipherMode int) (string, error) {
 		return "", errors.New(sm2CiphertextSupport)
 	}
 
-	priv := x509.ReadPrivateKeyFromDhex(priKey)
+	priv, err3 := readPrivateKeyFromHex(priKey)
+	if err3 != nil {
+		return "", err3
+	}
 	var d0 []byte
 	var err2 error
 	if cipherMode == 1 {
 		d0, err2 = sm2.Decrypt(priv, bytesPass)
 	} else {
-		d0, err2 = sm2.DecryptWithOldModel(priv, bytesPass)
+		d0, err2 = decryptWithOldModel(priv, bytesPass)
 	}
 	if err2 != nil {
 		return "", err2
@@ -95,7 +100,10 @@ func Sm2SignWithSM3(priKey, plaintext string) (string, error) {
 		return "", errors.New(plaintextSupport)
 	}
 
-	priv := x509.ReadPrivateKeyFromDhex(priKey)
+	priv, err2 := readPrivateKeyFromHex(priKey)
+	if err2 != nil {
+		return "", err2
+	}
 	sign, err1 := priv.Sign(rand.Reader, []byte(plaintext), nil) // 签名
 	if err1 != nil {
 		return "", err1
@@ -116,7 +124,7 @@ func Sm2VerifyWithSM3(pubKey, plaintext, signature string) (bool, error) {
 		return false, errors.New(signatureSupport)
 	}
 
-	pub, err1 := x509.ReadPublicKeyFromQhex(pubKey)
+	pub, err1 := readPublicKeyFromHex(pubKey)
 	if err1 != nil {
 		return false, err1
 	}
@@ -130,4 +138,117 @@ func Sm2VerifyWithSM3(pubKey, plaintext, signature string) (bool, error) {
 	}
 
 	return pub.Verify([]byte(plaintext), bytesPass), nil
+}
+
+//kxz：该函数已并入主线，为先固定版本手动copy至此，等gmsm包更新发版后可使用最新版并删除此函数。
+func writePrivateKeyToHex(key *sm2.PrivateKey) string {
+	return key.D.Text(16)
+}
+
+//kxz：该函数已并入主线，为先固定版本手动copy至此，等gmsm包更新发版后可使用最新版并删除此函数。
+func writePublicKeyToHex(key *sm2.PublicKey) string {
+	x := key.X.Bytes()
+	y := key.Y.Bytes()
+	if n := len(x); n < 32 {
+		x = append(zeroByteSlice()[:32-n], x...)
+	}
+	if n := len(y); n < 32 {
+		y = append(zeroByteSlice()[:32-n], y...)
+	}
+	c := []byte{}
+	c = append(c, x...)
+	c = append(c, y...)
+	c = append([]byte{0x04}, c...)
+	return hex.EncodeToString(c)
+}
+
+// 32byte
+func zeroByteSlice() []byte {
+	return []byte{
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+	}
+}
+
+//kxz：该函数已并入主线，为先固定版本手动copy至此，等gmsm包更新发版后可使用最新版并删除此函数。
+func readPublicKeyFromHex(Qhex string) (*sm2.PublicKey, error) {
+	q, err := hex.DecodeString(Qhex)
+	if err != nil {
+		return nil, err
+	}
+	if len(q) == 65 && q[0] == byte(0x04) {
+		q = q[1:]
+	}
+	if len(q) != 64 {
+		return nil, errors.New("publicKey is not uncompressed.")
+	}
+	pub := new(sm2.PublicKey)
+	pub.Curve = sm2.P256Sm2()
+	pub.X = new(big.Int).SetBytes(q[:32])
+	pub.Y = new(big.Int).SetBytes(q[32:])
+	return pub, nil
+}
+
+//kxz：该函数已并入主线，为先固定版本手动copy至此，等gmsm包更新发版后可使用最新版并删除此函数。
+func readPrivateKeyFromHex(Dhex string) (*sm2.PrivateKey, error) {
+	c := sm2.P256Sm2()
+	d, err := hex.DecodeString(Dhex)
+	if err != nil {
+		return nil, err
+	}
+	k := new(big.Int).SetBytes(d)
+	params := c.Params()
+	one := new(big.Int).SetInt64(1)
+	n := new(big.Int).Sub(params.N, one)
+	if k.Cmp(n) >= 0 {
+		return nil, errors.New("privateKey's D is overflow.")
+	}
+	priv := new(sm2.PrivateKey)
+	priv.PublicKey.Curve = c
+	priv.D = k
+	priv.PublicKey.X, priv.PublicKey.Y = c.ScalarBaseMult(k.Bytes())
+	return priv, nil
+}
+
+func encryptWithOldModel(pub *sm2.PublicKey, data []byte, random io.Reader) ([]byte, error) {
+	ciphertext, err := sm2.Encrypt(pub, data, random)
+	if err != nil {
+		return ciphertext, err
+	}
+	ciphertext = ciphertext[1:]
+	c1 := make([]byte, 64)
+	c2 := make([]byte, len(ciphertext)-96)
+	c3 := make([]byte, 32)
+	copy(c1, ciphertext[:64])   //x1,y1
+	copy(c3, ciphertext[64:96]) //hash
+	copy(c2, ciphertext[96:])   //密文
+	c := []byte{}
+	c = append(c, c1...)
+	c = append(c, c2...)
+	c = append(c, c3...)
+
+	return append([]byte{0x04}, c...), nil
+}
+
+func decryptWithOldModel(priv *sm2.PrivateKey, data []byte) ([]byte, error) {
+	data = data[1:]
+	c1 := make([]byte, 64)
+	c2 := make([]byte, len(data)-96)
+	c3 := make([]byte, 32)
+
+	copy(c1, data[:64])             //x1,y1
+	copy(c2, data[64:len(data)-32]) //密文
+	copy(c3, data[len(data)-32:])   //hash
+	c := []byte{}
+	c = append(c, c1...)
+	c = append(c, c3...)
+	c = append(c, c2...)
+	data = append([]byte{0x04}, c...)
+	return sm2.Decrypt(priv, data)
 }
