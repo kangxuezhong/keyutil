@@ -1,12 +1,7 @@
 # keyutil
-本demo基于苏州同济区块链研究院有限公司的[gmsm](https://github.com/tjfoc/gmsm) ，gmsm代码风格和crypto标准库基本相同。但其sm2不支持Hex格式密钥和C1C2C3旧加密模式，笔者已实现并推送至gmsm，但gmsm还未接受。所以暂时需要从<https://github.com/kangxuezhong/gmsm>下载主线代码并在go.mod中做如下处理：
+本demo基于苏州同济区块链研究院有限公司的[gmsm](https://github.com/tjfoc/gmsm) ，gmsm代码风格和crypto标准库基本相同，但其sm2不支持Hex格式密钥和C1C2C3旧加密模式。已实现并推送至gmsm，经讨论修改后已并入主线。但为稳定考虑，继续使用gmsm的v1.4.0版本，并将部分更新代码手动复制至此demo，待gmsm发布稳定版本后可更新删除。依赖如下：
 ```
-require (
-	github.com/kangxuezhong/gmsm v1.4.1
-	github.com/tjfoc/gmsm v1.4.0 // indirect
-)
-
-replace github.com/kangxuezhong/gmsm => ../gmsm
+require github.com/tjfoc/gmsm v1.4.0
 ```
 
 另外，密钥的格式以及密文签名的编码是个复杂而又无聊的东西。为简单起见，这里直接指定某种通用格式。所以，若是与其它语言或第三方工具进行交互可能需要对密钥、密文、签名、偏移向量等做下格式转换。
